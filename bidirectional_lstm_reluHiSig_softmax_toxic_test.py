@@ -25,9 +25,9 @@ from keras.layers import Dense, Dropout, Embedding, LSTM, Bidirectional
 FILE=sys.argv[1]  # file path
 num_classes = 6
 batch_size = int(sys.argv[2]) # try with 32
-maxlen = 2300   # longest comment in words split(' ')
+maxlen = int(sys.argv[3])   # longest comment in words split(' ') is 2300, vast majority under 300
 max_features = 5000 # cut texts after this number of words, since character max is 5000, word max also has this ceiling
-EPOCHS=int(sys.argv[3])
+EPOCHS=int(sys.argv[4])
 
 # import data
 print('Importing data...')
