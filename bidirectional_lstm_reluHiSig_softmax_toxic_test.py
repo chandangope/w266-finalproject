@@ -88,4 +88,4 @@ model.fit(x_train, y_train,
           epochs=EPOCHS,
           validation_data=[x_test, y_test])
 
-model.save('bidirectional_lstm_reluHiSig_softmax_{}epochs.h5'.format(EPOCHS))
+model.save('bidirectional_lstm_reluHiSig_softmax_{}batch_{}epochs.h5'.format(batch_size,EPOCHS))
