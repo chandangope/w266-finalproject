@@ -54,7 +54,7 @@ print("x length:{0}".format(len(x)))
 # max_sent_length, sent = max([(len(i.split(" ")),i) for i in x])
 # print("Max sent length = {0}".format(max_sent_length))
 # print("Sent with max length = {0}".format(sent))
-max_sent_length = 80
+max_sent_length = 40
 vocab_processor = learn.preprocessing.VocabularyProcessor(max_sent_length)
 x = np.array(list(vocab_processor.fit_transform(x))) #x is an iterable, [n_samples, max_sent_length] Word-id matrix.
 print("Shape of word-id matrix: {0}".format(x.shape))
@@ -189,7 +189,7 @@ with tf.Graph().as_default():
 
         # Create batches aware of imbalance in class distributions
         # batches = data_helpers.makeBatches(x_train, y_train[:,1].tolist(), FLAGS.batch_size, FLAGS.num_epochs)
-        
+
         # Training loop. For each batch...
         prev_val_acc = 0
         for batch in batches:
