@@ -99,3 +99,11 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+*.csv
+rnn-text-classification-tf/runs/
+cnn-text-classification-tf/
+kernels/
+*.txt
+
+
