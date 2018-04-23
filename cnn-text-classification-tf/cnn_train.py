@@ -6,9 +6,9 @@ import os
 import time
 import datetime
 import data_helpers
-from text_rnn import TextRNN
+from text_cnn import TextCNN
 from tensorflow.contrib import learn
-
+from sklearn.feature_extraction.text import CountVectorizer
 
 # Parameters
 # ==================================================
@@ -17,18 +17,23 @@ from tensorflow.contrib import learn
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
+tf.flags.DEFINE_float("dev_sample_percentage", .1, "Percentage of the training data to use for validation")
+tf.flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data.")
+tf.flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data.")
 
 # Model Hyperparameters
 tf.flags.DEFINE_integer("embedding_dim", 100, "Dimensionality of character embedding (default: 100)")
+tf.flags.DEFINE_string("filter_sizes", "3,5,7", "Comma-separated filter sizes (default: '3,4,5')")
+tf.flags.DEFINE_integer("num_filters", 64, "Number of filters per filter size (default: 128)")
 tf.flags.DEFINE_float("dropout_keep_prob", 0.5, "Dropout keep probability (default: 0.5)")
+tf.flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularization lambda (default: 0.0)")
 
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 128, "Batch Size (default: 64)")
 tf.flags.DEFINE_integer("num_epochs", 100, "Number of training epochs (default: 200)")
-tf.flags.DEFINE_integer("evaluate_every", 500, "Evaluate model on dev set after this many steps (default: 100)")
-tf.flags.DEFINE_integer("checkpoint_every", 500, "Save model after this many steps (default: 100)")
+tf.flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps (default: 100)")
+tf.flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps (default: 100)")
 tf.flags.DEFINE_integer("num_checkpoints", 3, "Number of checkpoints to store (default: 5)")
-
 # Misc Parameters
 tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
 tf.flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
@@ -51,9 +56,6 @@ x = x_train+x_dev
 print("x length:{0}".format(len(x)))
 
 # Build vocabulary
-# max_sent_length, sent = max([(len(i.split(" ")),i) for i in x])
-# print("Max sent length = {0}".format(max_sent_length))
-# print("Sent with max length = {0}".format(sent))
 max_sent_length = 80
 vocab_processor = learn.preprocessing.VocabularyProcessor(max_sent_length)
 x = np.array(list(vocab_processor.fit_transform(x))) #x is an iterable, [n_samples, max_sent_length] Word-id matrix.
@@ -73,8 +75,7 @@ y_train = y_train[shuffle_indices]
 
 del x
 
-vocabsize = len(vocab_processor.vocabulary_)
-print("Vocabulary Size: {:d}".format(vocabsize))
+print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
 
 # Training
 # ==================================================
@@ -85,16 +86,19 @@ with tf.Graph().as_default():
       log_device_placement=FLAGS.log_device_placement)
     sess = tf.Session(config=session_conf)
     with sess.as_default():
-        rnn = TextRNN(
+        cnn = TextCNN(
             sequence_length=x_train.shape[1],
             num_classes=y_train.shape[1],
-            vocab_size=vocabsize,
-            embedding_size=FLAGS.embedding_dim)
+            vocab_size=len(vocab_processor.vocabulary_),
+            embedding_size=FLAGS.embedding_dim,
+            filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
+            num_filters=FLAGS.num_filters,
+            l2_reg_lambda=FLAGS.l2_reg_lambda)
 
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
         optimizer = tf.train.AdamOptimizer(1e-3)
-        grads_and_vars = optimizer.compute_gradients(rnn.loss)
+        grads_and_vars = optimizer.compute_gradients(cnn.loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
         # Keep track of gradient values and sparsity (optional)
@@ -114,8 +118,8 @@ with tf.Graph().as_default():
         print("Writing to {}\n".format(out_dir))
 
         # Summaries for loss and accuracy
-        loss_summary = tf.summary.scalar("loss", rnn.loss)
-        acc_summary = tf.summary.scalar("accuracy", rnn.accuracy)
+        loss_summary = tf.summary.scalar("loss", cnn.loss)
+        acc_summary = tf.summary.scalar("accuracy", cnn.accuracy)
 
         # Train Summaries
         train_summary_op = tf.summary.merge([loss_summary, acc_summary, grad_summaries_merged])
@@ -142,7 +146,7 @@ with tf.Graph().as_default():
 
         vocabulary = vocab_processor.vocabulary_
         initEmbeddings = data_helpers.load_embedding_vectors_glove(vocabulary)
-        sess.run(rnn.W_embed.assign(initEmbeddings))
+        sess.run(cnn.W_embed.assign(initEmbeddings))
 
         for v in tf.trainable_variables():
             print(v.name)
@@ -152,12 +156,12 @@ with tf.Graph().as_default():
             A single training step
             """
             feed_dict = {
-              rnn.input_x: x_batch,
-              rnn.input_y: y_batch,
-              rnn.dropout_keep_prob: FLAGS.dropout_keep_prob
+              cnn.input_x: x_batch,
+              cnn.input_y: y_batch,
+              cnn.dropout_keep_prob: FLAGS.dropout_keep_prob
             }
             _, step, summaries, loss, accuracy = sess.run(
-                [train_op, global_step, train_summary_op, rnn.loss, rnn.accuracy],
+                [train_op, global_step, train_summary_op, cnn.loss, cnn.accuracy],
                 feed_dict)
             time_str = datetime.datetime.now().isoformat()
             # print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
@@ -170,12 +174,12 @@ with tf.Graph().as_default():
             Evaluates model on a dev set
             """
             feed_dict = {
-              rnn.input_x: x_batch,
-              rnn.input_y: y_batch,
-              rnn.dropout_keep_prob: 1.0
+              cnn.input_x: x_batch,
+              cnn.input_y: y_batch,
+              cnn.dropout_keep_prob: 1.0
             }
             step, summaries, loss, accuracy = sess.run(
-                [global_step, dev_summary_op, rnn.loss, rnn.accuracy],
+                [global_step, dev_summary_op, cnn.loss, cnn.accuracy],
                 feed_dict)
             time_str = datetime.datetime.now().isoformat()
             print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
@@ -183,6 +187,7 @@ with tf.Graph().as_default():
                 writer.add_summary(summaries, step)
 
             return accuracy
+
 
         # Create batches agnostic of class distributions
         batches = data_helpers.batch_iter(list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)

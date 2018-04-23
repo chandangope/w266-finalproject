@@ -6,6 +6,7 @@ import os
 import time
 import datetime
 import data_helpers
+from text_cnn import TextCNN
 from tensorflow.contrib import learn
 import csv
 
@@ -16,6 +17,8 @@ import csv
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
+# tf.flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data.")
+# tf.flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data.")
 tf.flags.DEFINE_string("positive_data_file", "../data/toxic_yes_dev.txt", "Data source for the positive data.")
 tf.flags.DEFINE_string("negative_data_file", "../data/toxic_no_dev.txt", "Data source for the negative data.")
 
@@ -28,6 +31,13 @@ tf.flags.DEFINE_boolean("eval_train", True, "Evaluate on all training data")
 tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
 tf.flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
 
+
+# FLAGS = tf.flags.FLAGS
+# FLAGS._parse_flags()
+# print("\nParameters:")
+# for attr, value in sorted(FLAGS.__flags.items()):
+#     print("{}={}".format(attr.upper(), value))
+# print("")
 
 # CHANGE THIS: Load data. Load your own data here
 if FLAGS.eval_train:
@@ -72,7 +82,7 @@ with graph.as_default():
         dropout_keep_prob = graph.get_operation_by_name("dropout_keep_prob").outputs[0]
 
         # Tensors we want to evaluate
-        predictions = graph.get_operation_by_name("Output_Layer/predictions").outputs[0]
+        predictions = graph.get_operation_by_name("output/predictions").outputs[0]
 
         # Generate batches for one epoch
         batches = data_helpers.batch_iter(list(x_test), FLAGS.batch_size, 1, shuffle=False)

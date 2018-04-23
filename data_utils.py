@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from random import shuffle
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from collections import OrderedDict
 
 class DataLoader(object):
 	"""Class to load data"""
@@ -14,42 +16,49 @@ class DataLoader(object):
 		self._path = path
 
 	def splitDataAndSave(self, data):
-	    toxic_no = data.loc[data['toxic'] == 0]['comment_text'].tolist()
-	    toxic_yes = data.loc[data['toxic'] == 1]['comment_text'].tolist()
-	    toxic_no = [self.clean_str(sent) for sent in toxic_no]
-	    toxic_yes = [self.clean_str(sent) for sent in toxic_yes]
+		toxic_no = data.loc[data['toxic'] == 0]['comment_text'].tolist()
+		toxic_yes = data.loc[data['toxic'] == 1]['comment_text'].tolist()
+		vectorizer = TfidfVectorizer(stop_words='english', max_features=200, ngram_range=(1,1), analyzer='word')
+		vectorizer.fit(toxic_yes)
+		top_words_dict = vectorizer.vocabulary_
+		top_words_dict = OrderedDict(sorted(top_words_dict.items(), key=lambda t: t[1], reverse=True))
 
-	    shuffle(toxic_no)
-	    shuffle(toxic_yes)
+		# toxic_no = [self.clean_str(sent) for sent in toxic_no]
+		# toxic_yes = [self.clean_str(sent) for sent in toxic_yes]
+		toxic_no = [self.preprocess_comment(sent, top_words_dict, max_length=80, neighborhood=2) for sent in toxic_no]
+		toxic_yes = [self.preprocess_comment(sent, top_words_dict, max_length=80, neighborhood=2) for sent in toxic_yes]
 
-	    dev_index = -1 * int(0.2 * float(len(toxic_no)))
-	    toxic_no_train, toxic_no_dev = toxic_no[:dev_index], toxic_no[dev_index:]
-	    print("toxic_no_train size:{0}, toxic_no_dev size:{1}".format(len(toxic_no_train), len(toxic_no_dev)))
-	    
-	    outF = open("./data/toxic_no_train.txt", "w")
-	    for item in toxic_no_train:
-	    	outF.write("%s\n" % item)
-	    outF.close()
+		shuffle(toxic_no)
+		shuffle(toxic_yes)
 
-	    outF = open("./data/toxic_no_dev.txt", "w")
-	    for item in toxic_no_dev:
-	    	outF.write("%s\n" % item)
-	    outF.close()
+		dev_index = -1 * int(0.2 * float(len(toxic_no)))
+		toxic_no_train, toxic_no_dev = toxic_no[:dev_index], toxic_no[dev_index:]
+		print("toxic_no_train size:{0}, toxic_no_dev size:{1}".format(len(toxic_no_train), len(toxic_no_dev)))
+
+		outF = open("./data/toxic_no_train.txt", "w")
+		for item in toxic_no_train:
+			outF.write("%s\n" % item)
+		outF.close()
+
+		outF = open("./data/toxic_no_dev.txt", "w")
+		for item in toxic_no_dev:
+			outF.write("%s\n" % item)
+		outF.close()
 
 
-	    dev_index = -1 * int(0.2 * float(len(toxic_yes)))
-	    toxic_yes_train, toxic_yes_dev = toxic_yes[:dev_index], toxic_yes[dev_index:]
-	    print("toxic_yes_train size:{0}, toxic_yes_dev size:{1}".format(len(toxic_yes_train), len(toxic_yes_dev)))
+		dev_index = -1 * int(0.2 * float(len(toxic_yes)))
+		toxic_yes_train, toxic_yes_dev = toxic_yes[:dev_index], toxic_yes[dev_index:]
+		print("toxic_yes_train size:{0}, toxic_yes_dev size:{1}".format(len(toxic_yes_train), len(toxic_yes_dev)))
 
-	    outF = open("./data/toxic_yes_train.txt", "w")
-	    for item in toxic_yes_train:
-	    	outF.write("%s\n" % item)
-	    outF.close()
+		outF = open("./data/toxic_yes_train.txt", "w")
+		for item in toxic_yes_train:
+			outF.write("%s\n" % item)
+		outF.close()
 
-	    outF = open("./data/toxic_yes_dev.txt", "w")
-	    for item in toxic_yes_dev:
-	    	outF.write("%s\n" % item)
-	    outF.close()
+		outF = open("./data/toxic_yes_dev.txt", "w")
+		for item in toxic_yes_dev:
+			outF.write("%s\n" % item)
+		outF.close()
 
 
 
@@ -74,6 +83,46 @@ class DataLoader(object):
 			print("Test data column names: {0}".format(test.columns.get_values()))
 
 		return (train, test)
+
+
+	def preprocess_comment(self, in_comment, top_words_dict, max_length, neighborhood=2):
+	    in_comment = re.sub(r"[^A-Za-z0-9]", " ", in_comment)
+	    in_comment = re.sub(" \d+", " NUM", in_comment)
+	    in_comment = re.sub(r"\s{2,}", " ", in_comment)
+	    in_words = in_comment.split()
+	    if len(in_words) <= max_length:
+	        return in_comment.strip().lower()
+	    else:
+	        triggers = []
+	        for i,k in enumerate(top_words_dict.keys()):
+	            if k in in_words:
+	                index = in_words.index(k)
+	                min_index = max(0, index-neighborhood)
+	                max_index = min(len(in_words), index+neighborhood)
+	                phrase = [w for w in in_words[min_index:max_index+1]]
+	                triggers.append((min_index, max_index, phrase))
+	        sorted_triggers = sorted(triggers, key=lambda t: t[0] , reverse=False)
+	        triggers_count = 0
+	        for c in sorted_triggers:
+	            triggers_count += len(c[2])
+	        nonTriggerRoom = max_length - triggers_count
+	        out_comment = []
+	        prev_end = 0
+	        for c in sorted_triggers:
+	            start = c[0]
+	            end = c[1]
+	            if prev_end < start and nonTriggerRoom > 0:
+	                end_tmp = min(start, prev_end+nonTriggerRoom)
+	                out_comment.extend(in_words[prev_end : end_tmp])
+	                nonTriggerRoom -= end_tmp - prev_end
+	            start = max(start, prev_end)
+	            out_comment.extend(in_words[start:end])
+	            prev_end = end
+	            
+	        out_comment = out_comment[:max_length]
+	    
+	    return ' '.join(out_comment).strip().lower()
+
 
 	def clean_str(self, string):
 	    """
