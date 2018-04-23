@@ -1,0 +1,12 @@
+CNN
+---
+Accuracy: 0.957071
+Total Pos: 3058, False Negative: 1016, Error%: 33.224329627207325
+Total Neg: 28855, False Positive: 354, Error%: 1.2268237740426269
+
+RNN
+----
+With unbalanced sampling - 
+Accuracy: 0.957948
+Total Pos: 3058, False Negative: 916, Error%: 29.954218443427077
+Total Neg: 28855, False Positive: 426, Error%: 1.476347253508924

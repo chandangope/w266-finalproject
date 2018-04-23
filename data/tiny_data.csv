@@ -1,0 +1,9 @@
+id,comment_text,toxic,severe_toxic,obscene,threat,insult,identity_hate
+001,This is ok comment,0,0,0,0,0,0
+002,This is toxic comment,1,0,0,0,0,0
+003,This is severe_toxic comment,1,1,0,0,0,0
+004,This is obscene comment,1,0,1,0,0,0
+005,This is threat comment,0,1,0,1,0,0
+006,This is insult comment,0,0,0,0,1,0
+007,This is hate comment,0,0,0,0,1,1
+008,This is really bad comment,1,1,1,1,1,1
